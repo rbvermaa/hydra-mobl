@@ -15,7 +15,6 @@ resource img/windows_32.png
 resource img/mac_32.png
 resource img/linux_32.png
 resource img/freebsd_32.png
-resource empty.png
 
 control float(side : String = "right", left : Num = 0, right : Num = 0) {
   <span class="float" style="float: " + side + "; margin-left: " + left + "px; margin-right: " +right+"px;">
@@ -24,40 +23,41 @@ control float(side : String = "right", left : Num = 0, right : Num = 0) {
 }
 
 screen root() {
-	tabSet([("Hydra","img/nixos_25.png", main), ("Settings", "img/settings_25.png", settings)])
+  tabSet([("Hydra","img/nixos_25.png", main), ("Settings", "img/settings_25.png", settings)])
 }
 
 control settings() {
-	header("Settings")
+  header("Settings")
 }
 
 control main() {
-    var projects = Hydra.projects()
+    var projects = Collection<Project>()
     var stats = Array<Num>()
-    var url : String = "empty.png"
+    var url : String = "mobl/ui/ios/empty.png"
 
     script {
         async {
             stats = nrbuilds(24, "hour");
             var data = buildstats(stats);
             url = googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 24 hours") ;
+            projects = Hydra.projects();
         }
     }
 
-    
+
     header("hydra.nixos.org")
     group {
       itemArrow(onclick={ latestbuildsall(); }) { "Latest builds" }
       itemArrow(onclick={ queue(); }) { "Queue (" label(Hydra.nrrunning()) "/" label(Hydra.nrqueue()) ")" }
     }
-    singleItem() { 
+    singleItem() {
         image(url, onclick={})
     }
     group {
-        list(p : Project in projects) {
+        list(p in projects) {
             itemArrow(onclick={ project(p); }) { label(p.name) }
         }
-        
+
     }
 }
 
@@ -65,7 +65,7 @@ function max(data : Array<Tuple2<String, Num>>) : Num {
     var max : Num = 0 ;
     for((label, value) in data) {
         if(value > max) { max = value; }
-    }    
+    }
     return max;
 }
 
@@ -79,21 +79,32 @@ function buildstats(nrs : Array<Num>) : Array<Tuple2<String, Num>> {
 }
 
 control link(url : String) {
-	<a href=url>elements()</a>
+  <a href=url>elements()</a>
 }
 
 control linkExt(url : String) {
-	<a href=url target="_new">elements()</a>
+  <a href=url target="_new">elements()</a>
 }
 
 screen project(p : Project) {
-    var jobsets = Hydra.jobsets(p.name)
-    var stats = nrbuilds(30, "day", p.name)
-    var data = buildstats(stats)
+    var jobsets = Collection<Jobset>()
+    var stats = Array<Num>()
+    var url : String = "mobl/ui/ios/empty.png"
+
+    var stats = Array<Num>()
+    var data = Array<Tuple2<String, Num>>()
+    script {
+      async {
+        jobsets = Hydra.jobsets(p.name);
+        stats = nrbuilds(30, "day", p.name);
+        data = buildstats(stats);
+      }
+    }
+
     header(p.name) {
         backButton("Back", onclick={ screen return; })
     }
-    singleItem() { 
+    singleItem() {
         image(googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 30 days"), onclick={})
     }
     group {
@@ -102,13 +113,13 @@ screen project(p : Project) {
                 float(side="left", left=0, right=10 ) {
                     image(jobsetStatusImage(j), onclick={})
                 }
-                    
-               	label(j.name)
+
+                 label(j.name)
                 <span style=jobsetColor(j)>
-	            	float(side="right", right=30) {
-	            	    cond(j.nrscheduled !=0) { label(j.nrscheduled) " builds in queue, " }
-	                	label(j.nrsucceeded) "/" label(j.nrtotal) " = " label(successRate(j)) "%"
-	            	}
+                float(side="right", right=30) {
+                    cond(j.nrscheduled !=0) { label(j.nrscheduled) " builds in queue, " }
+                    label(j.nrsucceeded) "/" label(j.nrtotal) " = " label(successRate(j)) "%"
+                }
                 </span>
             }
         }
@@ -122,11 +133,11 @@ screen jobset(j : Jobset) {
         backButton("Back", onclick={ screen return; })
     }
     singleItem { image(googleChartUrl(300, 100, "p3", [("Failed", (j.nrfailed/j.nrtotal)*100), ("Succeeded", (j.nrsucceeded/j.nrtotal)*100), ("Scheduled", (j.nrscheduled/j.nrtotal)*100)],title=""), onclick={}) }
-    singleItem() { 
+    singleItem() {
         image(googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 30 days"), onclick={})
     }
     var builds = latestbuilds(5, j.project, j.name)
-    buildlist(builds) 
+    buildlist(builds)
 }
 
 control singleItem() {
@@ -134,14 +145,14 @@ control singleItem() {
 }
 
 function googleChartUrl(width : Num, height : Num, type : String, data : Array<Tuple2<String, Num>>, max : Num = 100, title : String) : String {
-	var values = "";
-	var labels = "";
+  var values = "";
+  var labels = "";
     for((label, value) in data) {
         values = values + value + ",";
         if(label != "") {
             labels = labels + label + "|";
         }
-    }	 
+    }
     return "http://chart.apis.google.com/chart?cht="+ type +"&chtt="+title+"&chco=bbcebb&chbh=a,10,20&chxt=y&chds=0,"+max+"&chxr=0,0,"+max+"&chf=bg,s,65432100&chs="+width+"x"+height+"&chd=t:"+values + "0"+ (label == "" ? "" : "&chl="+labels);
 }
 
@@ -149,7 +160,7 @@ function jobsetStatusImage(j : Jobset) : String {
     if(j.nrscheduled > 0) { return "img/question-mark.png"; }
     if(j.nrfailed == 0) { return "img/success.gif"; }
     if(j.nrfailed > 0 && j.nrsucceeded > 0) { return "img/failure-some.gif"; }
-    return "img/failure.gif"; 
+    return "img/failure.gif";
 }
 
 function successRate(j: Jobset) : Num {
@@ -158,40 +169,40 @@ function successRate(j: Jobset) : Num {
 
 function jobsetColor(j : Jobset) : String {
     var successrate : Num = (j.nrsucceeded/j.nrtotal)*100 ;
-    
-    if ( j.nrscheduled > 0 ){ return ""; } 
-    if ( successrate < 25 ){ return "color : red;"; } 
-    if ( successrate < 75 ){ return "color : orange;"; } 
-    if ( successrate <= 100 ){ return "color : green;"; } 
+
+    if ( j.nrscheduled > 0 ){ return ""; }
+    if ( successrate < 25 ){ return "color : red;"; }
+    if ( successrate < 75 ){ return "color : orange;"; }
+    if ( successrate <= 100 ){ return "color : green;"; }
 }
 
 control builditem(b : Build) {
-	itemArrow(onclick={ openUrlWindow("http://hydra.nixos.org/build/"+b.id, "build"); }) {
-	   float(side="left", left=0, right=10 ) {
-	      systemImg(b.system) 
-	      cond(b.finished == 1) {
-		      " "
-		      cond(b.buildstatus == 0) { image("img/checkmark_32.png", onclick={}) } 
-		      cond(b.buildstatus != 0) { image("img/error_32.png", onclick={}) }
-		  }
-	   }
-	   label(b.nixname) ", " <span style="font-style:italic;font-size:smaller;"> label(formatDate(epoch2Date(b.timestamp))) </span>
+  itemArrow(onclick={ openUrlWindow("http://hydra.nixos.org/build/"+b.id, "build"); }) {
+     float(side="left", left=0, right=10 ) {
+        systemImg(b.system)
+        cond(b.finished == 1) {
+          " "
+          cond(b.buildstatus == 0) { image("img/checkmark_32.png", onclick={}) }
+          cond(b.buildstatus != 0) { image("img/error_32.png", onclick={}) }
+      }
+     }
+     label(b.nixname) ", " <span style="font-style:italic;font-size:smaller;"> label(formatDate(epoch2Date(b.timestamp))) </span>
        cond(b.finished != 1) {
            <span style="font-style:italic;font-size:smaller;">
-	           float(side="right", right=30) {
+             float(side="right", right=30) {
                    cond(b.busy == 1) {"(busy)"}
                    cond(b.busy != 1) {label(b.priority)}
-	           } 
+             }
            </span>
        }
-	   <br/> 
-	   <span style="font-style:italic;font-size:smaller;">
-	       label(b.project) ":" label(b.jobset) ":" label(b.job)
-	       cond(b.finished == 1) { 
-	            " - " statusMessage(b.buildstatus)
-	       }
-       </span> 
-	}
+     <br/>
+     <span style="font-style:italic;font-size:smaller;">
+         label(b.project) ":" label(b.jobset) ":" label(b.job)
+         cond(b.finished == 1) {
+              " - " statusMessage(b.buildstatus)
+         }
+       </span>
+  }
 }
 
 control buildlist(builds : Collection<Build>) {
@@ -201,8 +212,8 @@ control buildlist(builds : Collection<Build>) {
 }
 
 screen latestbuildsall() {
-	var builds = latestbuilds(20)
-	
+  var builds = latestbuilds(20)
+
     header("Latest builds") {
         backButton("Back", onclick={ screen return; })
     }
@@ -222,23 +233,23 @@ screen queue() {
 }
 
 control systemImg(system : String) {
-	cond(system == "i686-freebsd") { image("img/freebsd_32.png", onclick={}) }
-	cond(system == "i686-cygwin") { image("img/windows_32.png", onclick={}) }
-	cond(system == "i686-linux" || system == "x86_64-linux") { image("img/linux_32.png", onclick={}) }
-	cond(system == "i686-darwin" || system == "x86_64-darwin") { image("img/mac_32.png", onclick={}) }
+  cond(system == "i686-freebsd") { image("img/freebsd_32.png", onclick={}) }
+  cond(system == "i686-cygwin") { image("img/windows_32.png", onclick={}) }
+  cond(system == "i686-linux" || system == "x86_64-linux") { image("img/linux_32.png", onclick={}) }
+  cond(system == "i686-darwin" || system == "x86_64-darwin") { image("img/mac_32.png", onclick={}) }
 }
 
 control statusMessage(status : Num) {
-	cond(status == 0 ) { "Success" }
-	cond(status == 1 ) { "Failed with non-zero exit code" }
-	cond(status == 2 ) { "Dependency failed" }
-	cond(status == 4 ) { "Cancelled" }
-	cond(status == 3 || status == 5 ) { "Unknown failure" }
+  cond(status == 0 ) { "Success" }
+  cond(status == 1 ) { "Failed with non-zero exit code" }
+  cond(status == 2 ) { "Dependency failed" }
+  cond(status == 4 ) { "Cancelled" }
+  cond(status == 3 || status == 5 ) { "Unknown failure" }
 }
 
 external type Project {
-	name : String
-	description : String
+  name : String
+  description : String
 }
 
 external type Build {
@@ -256,12 +267,12 @@ external type Build {
 }
 
 external type Jobset {
-	project : String
-	name : String
-	nrscheduled : Num
-	nrsucceeded : Num
-	nrtotal : Num
-	nrfailed : Num
+  project : String
+  name : String
+  nrscheduled : Num
+  nrsucceeded : Num
+  nrtotal : Num
+  nrfailed : Num
 }
 
 function latestbuilds(nr : Num, project: String = "", jobset : String = "", job : String = "", system : String = "") : Collection<Build> {
@@ -273,7 +284,7 @@ function nrbuilds(nr : Num, period : String, project: String = "", jobset : Stri
 }
 
 service Hydra {
-  root = "http://localhost:3000/api"
+  root = "http://130.161.159.80:3000/api"
   resource projects() : Collection<Project> {
     uri = "/projects"
     method = "GET"
@@ -298,12 +309,12 @@ service Hydra {
     uri = "/nrqueue"
     method = "GET"
     encoding = "json"
-  }  
+  }
   resource nrrunning() : Num {
     uri = "/nrrunning"
     method = "GET"
     encoding = "json"
-  }  
+  }
   resource _nrbuilds(nr : Num, period : String, project: String, jobset : String, job : String, system : String) : Array<Num> {
     uri = "/nrbuilds"
     method = "GET"

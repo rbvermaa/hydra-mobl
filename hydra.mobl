@@ -2,6 +2,7 @@ application hydra
 
 import mobl
 import mobl::ui::ios
+import mobl::ui::googlechart
 
 resource img/failure-some.gif
 resource img/failure.gif
@@ -32,14 +33,19 @@ control settings() {
 
 control main() {
     var projects = Collection<Project>()
-    var stats = Array<Num>()
+    var stats : [Num] = []
     var url : String = "mobl/ui/ios/empty.png"
-
+        
     script {
         async {
-            stats = nrbuilds(24, "hour");
-            var data = buildstats(stats);
-            url = googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 24 hours") ;
+            stats = Hydra.nrbuilds(24, "hour");
+            url = googleChartUrl(
+                type = "bvg", 
+                data = [stats] , 
+                title = "Nr builds over the last 24 hours", 
+                seriesColors= [["BBCEBB"]],
+                visibleAxes=["y"]
+            );
             projects = Hydra.projects();
         }
     }
@@ -56,22 +62,13 @@ control main() {
     group {
         list(p in projects) {
             itemArrow(onclick={ project(p); }) { label(p.name) }
-        }
-
+        }   
     }
 }
 
-function max(data : Array<Tuple2<String, Num>>) : Num {
-    var max : Num = 0 ;
-    for((label, value) in data) {
-        if(value > max) { max = value; }
-    }
-    return max;
-}
-
-function buildstats(nrs : Array<Num>) : Array<Tuple2<String, Num>> {
+function buildstats(nrs : [Num]) : [(String, Num)] {
     log(""+nrs);
-    var arr : Array<Tuple2<String, Num>> = [];
+    var arr : [(String, Num)] = [];
     for(nr in nrs) {
         arr.push(("",nr));
     }
@@ -88,16 +85,24 @@ control linkExt(url : String) {
 
 screen project(p : Project) {
     var jobsets = Collection<Jobset>()
-    var stats = Array<Num>()
     var url : String = "mobl/ui/ios/empty.png"
 
-    var stats = Array<Num>()
-    var data = Array<Tuple2<String, Num>>()
+    var stats : [Num] = []
+    var data  : [(String, Num)] = []
     script {
       async {
         jobsets = Hydra.jobsets(p.name);
-        stats = nrbuilds(30, "day", p.name);
-        data = buildstats(stats);
+        stats = Hydra.nrbuilds(30, "day", p.name);
+        url = googleChartUrl(
+            type = "bvg", 
+            data = [stats] , 
+            size = (300, 100), 
+            title = "Nr builds over the last 30 days", 
+            barWidth= ("a", 10, 20), 
+            seriesColors= [["BBCEBB"]],
+            fills=[("bg", "s", "65432100")], 
+            visibleAxes=["y"]
+        );
       }
     }
 
@@ -105,7 +110,7 @@ screen project(p : Project) {
         backButton("Back", onclick={ screen return; })
     }
     singleItem() {
-        image(googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 30 days"), onclick={})
+        image(url, onclick={})
     }
     group {
         list(j in jobsets) {
@@ -127,33 +132,47 @@ screen project(p : Project) {
 }
 
 screen jobset(j : Jobset) {
-    var stats = nrbuilds(30, "day", j.project, j.name)
-    var data = buildstats(stats)
-    header(j.name) {
+    var url1 : String = "mobl/ui/ios/empty.png"
+    var url2 : String = "mobl/ui/ios/empty.png"
+    script {
+        async {
+            url1 = googleChartUrl(
+                type = "p3", 
+                data = [ [(j.nrfailed/j.nrtotal)*100, (j.nrsucceeded/j.nrtotal)*100, (j.nrscheduled/j.nrtotal)*100] ], 
+                size = (300, 100), 
+                seriesColors= [["BBCEBB"]],
+                fills=[("bg", "s", "65432100")],
+                extraAttrs = [ ("chl","Failed|Succeeded|Scheduled")] 
+            );
+            var stats = Hydra.nrbuilds(30, "day", j.project, j.name) ;
+            url2 = googleChartUrl(
+                type = "bvg", 
+                data = [stats] , 
+                title = "Nr builds over the last 30 days", 
+                size = (300, 100), 
+                barWidth= ("a", 10, 20), 
+                seriesColors= [["BBCEBB"]],
+                fills=[("bg", "s", "65432100")], 
+                visibleAxes=["y"] 
+            );
+        }
+    }
+
+    header(j.project + ":" + j.name) {
         backButton("Back", onclick={ screen return; })
     }
-    singleItem { image(googleChartUrl(300, 100, "p3", [("Failed", (j.nrfailed/j.nrtotal)*100), ("Succeeded", (j.nrsucceeded/j.nrtotal)*100), ("Scheduled", (j.nrscheduled/j.nrtotal)*100)],title=""), onclick={}) }
-    singleItem() {
-        image(googleChartUrl(300, 100, "bvg", data, max(data), "Nr builds over the last 30 days"), onclick={})
+    singleItem { 
+        image(url1, onclick={}) 
     }
-    var builds = latestbuilds(5, j.project, j.name)
+    singleItem() {
+        image(url2, onclick={})
+    }
+    var builds = Hydra.latestbuilds(5, j.project, j.name)
     buildlist(builds)
 }
 
 control singleItem() {
     <ul><li>elements()</li></ul>
-}
-
-function googleChartUrl(width : Num, height : Num, type : String, data : Array<Tuple2<String, Num>>, max : Num = 100, title : String) : String {
-  var values = "";
-  var labels = "";
-    for((label, value) in data) {
-        values = values + value + ",";
-        if(label != "") {
-            labels = labels + label + "|";
-        }
-    }
-    return "http://chart.apis.google.com/chart?cht="+ type +"&chtt="+title+"&chco=bbcebb&chbh=a,10,20&chxt=y&chds=0,"+max+"&chxr=0,0,"+max+"&chf=bg,s,65432100&chs="+width+"x"+height+"&chd=t:"+values + "0"+ (label == "" ? "" : "&chl="+labels);
 }
 
 function jobsetStatusImage(j : Jobset) : String {
@@ -212,7 +231,7 @@ control buildlist(builds : Collection<Build>) {
 }
 
 screen latestbuildsall() {
-  var builds = latestbuilds(20)
+  var builds = Hydra.latestbuilds(20)
 
     header("Latest builds") {
         backButton("Back", onclick={ screen return; })
@@ -275,22 +294,14 @@ external type Jobset {
   nrfailed : Num
 }
 
-function latestbuilds(nr : Num, project: String = "", jobset : String = "", job : String = "", system : String = "") : Collection<Build> {
-    return Hydra._latestbuilds(nr, project, jobset, job, system) ;
-}
-
-function nrbuilds(nr : Num, period : String, project: String = "", jobset : String = "", job : String = "", system : String = "") : Array<Num> {
-    return Hydra._nrbuilds(nr, period, project, jobset, job, system) ;
-}
-
 service Hydra {
-  root = "http://130.161.159.80:3000/api"
+  root = "http://localhost:3000/api"
   resource projects() : Collection<Project> {
     uri = "/projects"
     method = "GET"
     encoding = "json"
   }
-  resource _latestbuilds(nr : Num, project: String, jobset : String, job : String, system : String) : Collection<Build> {
+  resource latestbuilds(nr : Num, project: String = "", jobset : String = "", job : String = "", system : String = "") : Collection<Build> {
     uri = "/latestbuilds"
     method = "GET"
     encoding = "json"
@@ -315,7 +326,7 @@ service Hydra {
     method = "GET"
     encoding = "json"
   }
-  resource _nrbuilds(nr : Num, period : String, project: String, jobset : String, job : String, system : String) : Array<Num> {
+  resource nrbuilds(nr : Num, period : String, project: String = "", jobset : String = "", job : String = "", system : String = "") : [ Num ] {
     uri = "/nrbuilds"
     method = "GET"
     encoding = "json"

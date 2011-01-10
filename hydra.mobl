@@ -17,6 +17,7 @@ resource img/mac_32.png
 resource img/linux_32.png
 resource img/freebsd_32.png
 
+
 control float(side : String = "right", left : Num = 0, right : Num = 0) {
   <span class="float" style="float: " + side + "; margin-left: " + left + "px; margin-right: " +right+"px;">
     elements()
@@ -35,7 +36,8 @@ control main() {
     var projects = Collection<Project>()
     var stats : [Num] = []
     var url : String = "mobl/ui/ios/empty.png"
-        
+    var url2 : String = "mobl/ui/ios/empty.png"
+   
     script {
         async {
             stats = Hydra.nrbuilds(24, "hour");
@@ -46,11 +48,17 @@ control main() {
                 seriesColors= [["BBCEBB"]],
                 visibleAxes=["y"]
             );
+            stats = Hydra.nrbuilds(30, "day");
+            url2 = googleChartUrl(
+                type = "bvg", 
+                data = [stats] , 
+                title = "Nr builds over the last 30 days", 
+                seriesColors= [["BBCEBB"]],
+                visibleAxes=["y"]
+            );
             projects = Hydra.projects();
         }
     }
-
-
     header("hydra.nixos.org")
     group {
       itemArrow(onclick={ latestbuildsall(); }) { "Latest builds" }
@@ -59,6 +67,9 @@ control main() {
     singleItem() {
         image(url, onclick={})
     }
+    singleItem() {
+        image(url2, onclick={})
+    }    
     group {
         list(p in projects) {
             itemArrow(onclick={ project(p); }) { label(p.name) }
@@ -69,7 +80,7 @@ control main() {
 function buildstats(nrs : [Num]) : [(String, Num)] {
     log(""+nrs);
     var arr : [(String, Num)] = [];
-    for(nr in nrs) {
+    foreach(nr in nrs) {
         arr.push(("",nr));
     }
     return arr;
@@ -136,6 +147,7 @@ screen jobset(j : Jobset) {
     var url2 : String = "mobl/ui/ios/empty.png"
     script {
         async {
+        	
             url1 = googleChartUrl(
                 type = "p3", 
                 data = [ [(j.nrfailed/j.nrtotal)*100, (j.nrsucceeded/j.nrtotal)*100, (j.nrscheduled/j.nrtotal)*100] ], 
@@ -294,8 +306,12 @@ external type Jobset {
   nrfailed : Num
 }
 
+external type RunningBuilds {
+
+}
+
 service Hydra {
-  root = "http://localhost:3000/api"
+  root = "http://hydra.nixos.org/api"
   resource projects() : Collection<Project> {
     uri = "/projects"
     method = "GET"
@@ -343,3 +359,45 @@ external sync function epoch2Date(epoch : Num) : DateTime
     hydra.epoch2Date = function(e) { return new Date(e*1000); };
 </javascript>
 
+
+entity ImageCache {
+	cacheid  : String 
+	url : String
+    dataURL : String	
+    datetime : DateTime
+}
+
+function lookupImage(cacheid : String) : ImageCache {
+	return ImageCache.findBy("cacheid", cacheid) ;
+}
+
+function saveImage(cacheid : String, url : String, dataURL : String) {
+	var data = lookupImage(cacheid) ;
+    if(data == null) {
+    	data = ImageCache( cacheid = cacheid );
+        add(data);
+    }
+    data.url = url;
+    data.datetime = now(); 
+    data.dataURL = dataURL;
+}
+
+external function loadImage(cacheid : String, url : String) : Image
+
+<javascript>
+
+hydra.loadImage = function(cacheid, url) { 
+    var img = new Image(); 
+    img.onload = function() { 
+	    var canvas = document.createElement("canvas");
+	    canvas.width = img.width; 
+	    canvas.height = img.height; 
+	    var ctx = canvas.getContext("2d"); 
+	    ctx.drawImage(img,0,0); 
+	    this.saveImage(cacheid, img.src, canvas.toDataURL());
+     }; 
+    img.src = url; 
+    return img;
+} ;
+
+</javascript>

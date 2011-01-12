@@ -1,7 +1,7 @@
 application hydra
 
 import mobl
-import mobl::ui::ios
+import mobl::ui::generic
 import mobl::ui::googlechart
 
 resource img/failure-some.gif
@@ -25,7 +25,7 @@ control float(side : String = "right", left : Num = 0, right : Num = 0) {
 }
 
 screen root() {
-  tabSet([("Hydra","img/nixos_25.png", main), ("Settings", "img/settings_25.png", settings)])
+  main()
 }
 
 control settings() {
@@ -64,11 +64,11 @@ control main() {
       itemArrow(onclick={ latestbuildsall(); }) { "Latest builds" }
       itemArrow(onclick={ queue(); }) { "Queue (" label(Hydra.nrrunning()) "/" label(Hydra.nrqueue()) ")" }
     }
-    singleItem() {
-        image(url, onclick={})
+    group {
+        itemArrow() { image(url, onclick={}) }
     }
-    singleItem() {
-        image(url2, onclick={})
+    group {
+        itemArrow() { image(url2, onclick={}) }
     }    
     group {
         list(p in projects) {
@@ -184,7 +184,9 @@ screen jobset(j : Jobset) {
 }
 
 control singleItem() {
-    <ul><li>elements()</li></ul>
+    group {
+        itemArrow() { elements() }
+    }
 }
 
 function jobsetStatusImage(j : Jobset) : String {
@@ -318,17 +320,17 @@ service Hydra {
     encoding = "json"
   }
   resource latestbuilds(nr : Num, project: String = "", jobset : String = "", job : String = "", system : String = "") : Collection<Build> {
-    uri = "/latestbuilds"
+    uri = "/latestbuilds?nr="+nr+"&project="+project+"&jobset="+jobset+"&job="+job+"&system="+system
     method = "GET"
     encoding = "json"
   }
   resource jobsets(project : String) : Collection<Jobset> {
-    uri = "/jobsets"
+    uri = "/jobsets?project="+project
     method = "GET"
     encoding = "json"
   }
   resource queue(nr : String = 100) : Collection<Build> {
-    uri = "/queue"
+    uri = "/queue?nr="+nr
     method = "GET"
     encoding = "json"
   }
@@ -343,7 +345,7 @@ service Hydra {
     encoding = "json"
   }
   resource nrbuilds(nr : Num, period : String, project: String = "", jobset : String = "", job : String = "", system : String = "") : [ Num ] {
-    uri = "/nrbuilds"
+    uri = "/nrbuilds?nr="+nr+"&period="+period+"&project="+project+"&jobset="+jobset+"&job="+job+"&system="+system
     method = "GET"
     encoding = "json"
   }
@@ -382,22 +384,3 @@ function saveImage(cacheid : String, url : String, dataURL : String) {
     data.dataURL = dataURL;
 }
 
-external function loadImage(cacheid : String, url : String) : Image
-
-<javascript>
-
-hydra.loadImage = function(cacheid, url) { 
-    var img = new Image(); 
-    img.onload = function() { 
-	    var canvas = document.createElement("canvas");
-	    canvas.width = img.width; 
-	    canvas.height = img.height; 
-	    var ctx = canvas.getContext("2d"); 
-	    ctx.drawImage(img,0,0); 
-	    this.saveImage(cacheid, img.src, canvas.toDataURL());
-     }; 
-    img.src = url; 
-    return img;
-} ;
-
-</javascript>
